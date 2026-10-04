@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventory Count Manager</title>
+    <style>
+        :root {
+            --primary-color: #007aff;
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --border-color: #e5e5ea;
+            --text-color: #000000;
+            --subtext-color: #8e8e93;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        input[type="file"], select, input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background-color: #fff;
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn:disabled {
+            background-color: var(--subtext-color);
+            opacity: 0.6;
+        }
+
+        .btn-secondary {
+            background-color: #34c759;
+        }
+
+        .btn-danger {
+            background-color: #ff3b30;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #f9f9fb;
+            font-weight: 600;
+        }
+
+        .count-cell {
+            width: 140px;
+        }
+
+        .count-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .count-input {
+            width: 70px;
+            padding: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+        }
+
+        .step-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #eef2f5;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--subtext-color);
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📦 Inventory Count Tool</h1>
+
+    <!-- File Upload Section -->
+    <div class="card">
+        <label for="csvFileInput">Import CSV Files (Multiple Brands/Warehouses)</label>
+        <input type="file" id="csvFileInput" accept=".csv" multiple>
+        <p style="font-size: 12px; color: var(--subtext-color); margin-top: 6px;">
+            You can select multiple CSV files at once or append files progressively.
+        </p>
+    </div>
+
+    <!-- Filters & Search Section -->
+    <div class="card" id="filterCard" style="display: none;">
+        <div class="filter-grid">
+            <div>
+                <label for="brandFilter">Filter by Brand</label>
+                <select id="brandFilter" onchange="applyFilters()">
+                    <option value="">All Brands</option>
+                </select>
+            </div>
+            <div>
+                <label for="warehouseFilter">Filter by Warehouse</label>
+                <select id="warehouseFilter" onchange="applyFilters()">
+                    <option value="">All Warehouses</option>
+                </select>
+            </div>
+            <div>
+                <label for="searchInput">Search SKU / Item</label>
+                <input type="text" id="searchInput" placeholder="Type SKU or Name..." oninput="applyFilters()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions & Data Display -->
+    <div class="card" id="dataCard" style="display: none;">
+        <div class="stats-bar">
+            <span id="recordCount">Total Items: 0</span>
+            <span id="countedCount">Items Counted: 0</span>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <button class="btn btn-secondary" onclick="exportToCSV()">Export Updated CSV</button>
+            <button class="btn btn-danger" style="width: 120px;" onclick="clearData()">Clear All</button>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr id="tableHeader">
+                        <!-- Dynamic Columns -->
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Dynamic Rows -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let rawHeaders = [];
+    let inventoryData = [];
+    let brandColIndex = -1;
+    let warehouseColIndex = -1;
+    let countColIndex = -1;
+
+    // Load persisted data on launch
+    window.onload = function() {
+        const savedData = localStorage.getItem("inventory_data");
+        const savedHeaders = localStorage.getItem("inventory_headers");
+        if (savedData && savedHeaders) {
+            inventoryData = JSON.parse(savedData);
+            rawHeaders = JSON.parse(savedHeaders);
+            detectColumnIndexes();
+            renderFilters();
+            renderTable(inventoryData);
+            document.getElementById('filterCard').style.display = 'block';
+            document.getElementById('dataCard').style.display = 'block';
+        }
+    };
+
+    document.getElementById('csvFileInput').addEventListener('change', handleFileSelect);
+
+    function handleFileSelect(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+
+        let filesRead = 0;
+        Array.from(files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseCSV(e.target.result);
+                filesRead++;
+                if (filesRead === files.length) {
+                    saveToLocalStorage();
+                    renderFilters();
+                    applyFilters();
+                    document.getElementById('filterCard').style.display = 'block';
+                    document.getElementById('dataCard').style.display = 'block';
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function parseCSV(text) {
+        const lines = text.split(/\r\n|\n/);
+        if (lines.length === 0) return;
+
+        // Simple CSV parser handling quotes
+        const parseLine = (line) => {
+            const row = [];
+            let insideQuotes = false;
+            let entry = '';
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                } else if (char === ',' && !insideQuotes) {
+                    row.push(entry.trim());
+                    entry = '';
+                } else {
+                    entry += char;
+                }
+            }
+            row.push(entry.trim());
+            return row;
+        };
+
+        const parsedRows = lines.map(l => l.trim()).filter(l => l.length > 0).map(parseLine);
+        if (parsedRows.length === 0) return;
+
+        if (rawHeaders.length === 0) {
+            rawHeaders = parsedRows[0];
+            detectColumnIndexes();
+            if (countColIndex === -1) {
+                rawHeaders.push("Physical Count");
+                countColIndex = rawHeaders.length - 1;
+            }
+        }
+
+        const dataRows = (rawHeaders.length === parsedRows[0].length && parsedRows[0][0] === rawHeaders[0]) 
+            ? parsedRows.slice(1) 
+            : parsedRows;
+
+        dataRows.forEach((row, idx) => {
+            // Normalize row length to match headers
+            while (row.length < rawHeaders.length) {
+                row.push("");
+            }
+            inventoryData.push({
+                id: Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+                row: row
+            });
+        });
+    }
+
+    function detectColumnIndexes() {
+        brandColIndex = rawHeaders.findIndex(h => /brand/i.test(h));
+        warehouseColIndex = rawHeaders.findIndex(h => /warehouse|location|wh/i.test(h));
+        countColIndex = rawHeaders.findIndex(h => /physical count|count|counted/i.test(h));
+    }
+
+    function renderFilters() {
+        const brandSelect = document.getElementById('brandFilter');
+        const warehouseSelect = document.getElementById('warehouseFilter');
+
+        const brands = new Set();
+        const warehouses = new Set();
+
+        inventoryData.forEach(item => {
+            if (brandColIndex !== -1 && item.row[brandColIndex]) brands.add(item.row[brandColIndex]);
+            if (warehouseColIndex !== -1 && item.row[warehouseColIndex]) warehouses.add(item.row[warehouseColIndex]);
+        });
+
+        brandSelect.innerHTML = '<option value="">All Brands</option>';
+        brands.forEach(b => brandSelect.innerHTML += `<option value="${b}">${b}</option>`);
+
+        warehouseSelect.innerHTML = '<option value="">All Warehouses</option>';
+        warehouses.forEach(w => warehouseSelect.innerHTML += `<option value="${w}">${w}</option>`);
+    }
+
+    function applyFilters() {
+        const selectedBrand = document.getElementById('brandFilter').value.toLowerCase();
+        const selectedWarehouse = document.getElementById('warehouseFilter').value.toLowerCase();
+        const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+
+        const filtered = inventoryData.filter(item => {
+            const matchesBrand = brandColIndex === -1 || !selectedBrand || (item.row[brandColIndex] && item.row[brandColIndex].toLowerCase() === selectedBrand);
+            const matchesWarehouse = warehouseColIndex === -1 || !selectedWarehouse || (item.row[warehouseColIndex] && item.row[warehouseColIndex].toLowerCase() === selectedWarehouse);
+            
+            const matchesSearch = !searchQuery || item.row.some(val => val.toLowerCase().includes(searchQuery));
+
+            return matchesBrand && matchesWarehouse && matchesSearch;
+        });
+
+        renderTable(filtered);
+    }
+
+    function renderTable(data) {
+        const headerRow = document.getElementById('tableHeader');
+        const tbody = document.getElementById('tableBody');
+
+        headerRow.innerHTML = '';
+        tbody.innerHTML = '';
+
+        if (rawHeaders.length === 0) return;
+
+        // Render Headers
+        rawHeaders.forEach((h, index) => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            if (index === countColIndex) th.className = "count-cell";
+            headerRow.appendChild(th);
+        });
+
+        // Render Body Rows
+        data.forEach(item => {
+            const tr = document.createElement('tr');
+
+            item.row.forEach((val, colIdx) => {
+                const td = document.createElement('td');
+                if (colIdx === countColIndex) {
+                    td.className = "count-cell";
+                    const countVal = val !== undefined ? val : "";
+                    td.innerHTML = `
+                        <div class="count-controls">
+                            <button class="step-btn" onclick="adjustCount('${item.id}', -1)">-</button>
+                            <input type="number" 
+                                   inputmode="numeric" 
+                                   class="count-input" 
+                                   value="${countVal}" 
+                                   onchange="updateCount('${item.id}', this.value)" />
+                            <button class="step-btn" onclick="adjustCount('${item.id}', 1)">+</button>
+                        </div>
+                    `;
+                } else {
+                    td.textContent = val;
+                }
+                tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+        });
+
+        // Update statistics
+        document.getElementById('recordCount').textContent = `Total Items: ${inventoryData.length}`;
+        const counted = inventoryData.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
+        document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
+    }
+
+    function updateCount(id, value) {
+        const item = inventoryData.find(i => i.id === id);
+        if (item) {
+            item.row[countColIndex] = value;
+            saveToLocalStorage();
+            const counted = inventoryData.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
+            document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
+        }
+    }
+
+    function adjustCount(id, delta) {
+        const item = inventoryData.find(i => i.id === id);
+        if (item) {
+            let current = parseInt(item.row[countColIndex], 10);
+            if (isNaN(current)) current = 0;
+            const updated = Math.max(0, current + delta);
+            item.row[countColIndex] = updated.toString();
+            saveToLocalStorage();
+            applyFilters();
+        }
+    }
+
+    function saveToLocalStorage() {
+        localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
+        localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
+    }
+
+    function exportToCSV() {
+        if (inventoryData.length === 0) return;
+
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Escape quotes for CSV format
+        const formatCSVRow = (arr) => arr.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
+
+        csvContent += formatCSVRow(rawHeaders) + "\r\n";
+
+        inventoryData.forEach(item => {
+            csvContent += formatCSVRow(item.row) + "\r\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `inventory_count_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function clearData() {
+        if (confirm("Are you sure you want to clear all loaded inventory data?")) {
+            localStorage.removeItem("inventory_data");
+            localStorage.removeItem("inventory_headers");
+            inventoryData = [];
+            rawHeaders = [];
+            document.getElementById('filterCard').style.display = 'none';
+            document.getElementById('dataCard').style.display = 'none';
+            document.getElementById('csvFileInput').value = '';
+        }
+    }
+</script>
+
+</body>
+</html>
