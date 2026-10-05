@@ -11,7 +11,7 @@ const firebaseConfig = {
 };
 
 // System Passwords
-const ADMIN_PASSWORD = "04052001";
+const ADMIN_PASSWORD = "1234";
 const ENTITY_PASSWORDS = {
     "Native Grasses": "NG",
     "Brookside": "BRK",
