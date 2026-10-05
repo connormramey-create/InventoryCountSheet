@@ -13,6 +13,7 @@ const firebaseConfig = {
 // System Passwords
 const ADMIN_PASSWORD = "1234";
 const ENTITY_PASSWORDS = {
+    "default": "1234",
     "Native Grasses": "NG",
     "Brookside": "BRK",
     "Meehans": "MEE",
@@ -31,7 +32,7 @@ const ENTITY_PASSWORDS = {
     "Highest Quality": "HQL"
 };
 
-// Global Application State
+// Global State Variables
 let db = null;
 let isGlobalSync = false;
 
@@ -42,7 +43,7 @@ let entityWorkflowMap = {};
 let activeUnlockedEntity = "";
 let isApprovalMode = false;
 
-// Column Indexes
+// Column Index Pointers
 let entityColIndex = -1;
 let warehouseIdColIndex = -1;
 let warehouseNameColIndex = -1;
