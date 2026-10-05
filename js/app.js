@@ -280,6 +280,9 @@ function renderMobileCards(data) {
     data.forEach(item => {
         const itemName = (itemNameColIndex !== -1 && item.row[itemNameColIndex]) ? item.row[itemNameColIndex] : "Item Record";
         const productLine = (productLineColIndex !== -1 && item.row[productLineColIndex]) ? item.row[productLineColIndex] : "";
+        const warehouseName = (warehouseNameColIndex !== -1 && item.row[warehouseNameColIndex]) ? item.row[warehouseNameColIndex] : 
+                            (warehouseColIndex !== -1 && item.row[warehouseColIndex]) ? item.row[warehouseColIndex] : "";
+        const warehouseId = (warehouseIdColIndex !== -1 && item.row[warehouseIdColIndex]) ? item.row[warehouseIdColIndex] : "";
         const countVal = item.row[countColIndex] !== undefined ? item.row[countColIndex] : "";
         const startVal = (startCountColIndex !== -1 && item.row[startCountColIndex]) ? item.row[startCountColIndex] : "0";
 
@@ -296,10 +299,13 @@ function renderMobileCards(data) {
             `;
         }
 
+        let whDisplay = (warehouseId && warehouseName) ? `${warehouseId} - ${warehouseName}` : (warehouseId || warehouseName);
+
         card.innerHTML = `
             <div class="card-item-name">${itemName}</div>
             <div class="card-meta-row">
-                ${productLine ? `<span class="card-meta-tag">🏷 ${productLine}</span>` : ''}
+                ${productLine ? `<span class="card-meta-tag">🏷️ ${productLine}</span>` : ''}
+                ${whDisplay ? `<span class="card-meta-tag">🏭 ${whDisplay}</span>` : ''}
             </div>
             <div class="card-count-bar">
                 ${startCountHTML || '<div>Count Input:</div>'}
@@ -312,30 +318,4 @@ function renderMobileCards(data) {
         `;
         container.appendChild(card);
     });
-}
-
-function updateStats(data) {
-    document.getElementById('recordCount').textContent = `Total Items: ${data.length}`;
-    const counted = data.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
-    document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
-}
-
-function updateCount(id, value) {
-    const item = inventoryData.find(i => i.id === id);
-    if (item) {
-        item.row[countColIndex] = value;
-        saveData();
-        applyFilters();
-    }
-}
-
-function adjustCount(id, delta) {
-    const item = inventoryData.find(i => i.id === id);
-    if (item) {
-        let current = parseInt(item.row[countColIndex], 10);
-        if (isNaN(current)) current = 0;
-        item.row[countColIndex] = Math.max(0, current + delta).toString();
-        saveData();
-        applyFilters();
-    }
 }
