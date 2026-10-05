@@ -1,3 +1,15 @@
+function getEntityPassword(entityName) {
+    if (!entityName) return ENTITY_PASSWORDS["default"] || "1234";
+    const cleanName = entityName.trim();
+    if (ENTITY_PASSWORDS[cleanName]) return ENTITY_PASSWORDS[cleanName];
+    
+    // Case-insensitive & whitespace-tolerant lookup
+    const foundKey = Object.keys(ENTITY_PASSWORDS).find(k => k.trim().toLowerCase() === cleanName.toLowerCase());
+    if (foundKey) return ENTITY_PASSWORDS[foundKey];
+    
+    return ENTITY_PASSWORDS["default"] || "1234";
+}
+
 function promptProtectedAction(actionType, entityName = "") {
     pendingAction = { type: actionType, entity: entityName };
     const modal = document.getElementById('passwordModal');
@@ -31,7 +43,6 @@ function submitModalPassword() {
     const inputPass = document.getElementById('modalPasswordInput').value.trim();
     if (!pendingAction) return;
 
-    // Capture pendingAction properties before closing the modal
     const currentAction = pendingAction.type;
     const currentEntity = pendingAction.entity;
 
@@ -44,13 +55,15 @@ function submitModalPassword() {
             alert("Incorrect Admin Password.");
         }
     } else if (currentAction === 'unlock_entity') {
-        const requiredPass = ENTITY_PASSWORDS[currentEntity] || ENTITY_PASSWORDS["default"];
+        const requiredPass = getEntityPassword(currentEntity);
         if (inputPass === requiredPass || inputPass === ADMIN_PASSWORD) {
             activeUnlockedEntity = currentEntity;
             closeModal();
             renderWarehouseFilter();
             renderProductLineFilter();
             applyFilters();
+            
+            document.getElementById('entityPromptBanner').style.display = 'none';
             document.getElementById('dataCard').style.display = 'block';
         } else {
             alert("Incorrect Entity Password.");
