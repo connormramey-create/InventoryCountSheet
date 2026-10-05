@@ -2,6 +2,7 @@ window.onload = function() {
     initStorageAndSync();
 
     if (isGlobalSync && db) {
+        // Realtime listener for Firebase synchronization
         db.ref('inventory_data').on('value', (snapshot) => {
             const data = snapshot.val();
             if (data && data.headers && data.items) {
@@ -11,9 +12,29 @@ window.onload = function() {
                 detectColumnIndexes();
                 renderFilters();
                 document.getElementById('filterCard').style.display = 'block';
+
+                // Re-render active list if an entity is currently unlocked
+                if (activeUnlockedEntity) {
+                    applyFilters();
+                    document.getElementById('dataCard').style.display = 'block';
+                }
+            } else {
+                // DATA CLEARED OR EMPTY: Reset UI state completely
+                inventoryData = [];
+                rawHeaders = [];
+                entityWorkflowMap = {};
+                activeUnlockedEntity = "";
+                isApprovalMode = false;
+
+                const entitySelect = document.getElementById('entityFilter');
+                if (entitySelect) entitySelect.value = "";
+
+                document.getElementById('filterCard').style.display = 'none';
+                document.getElementById('dataCard').style.display = 'none';
             }
         });
     } else {
+        // LocalStorage fallback
         const savedData = localStorage.getItem("inventory_data");
         const savedHeaders = localStorage.getItem("inventory_headers");
         const savedWorkflows = localStorage.getItem("entity_workflows");
@@ -137,7 +158,7 @@ function applyFilters() {
         if (sortBy === 'productLine' && productLineColIndex !== -1) {
             return (a.row[productLineColIndex] || "").localeCompare(b.row[productLineColIndex] || "");
         } else if (sortBy === 'count') {
-            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
+            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(b.row[countColIndex]) || 0);
         } else if (sortBy === 'countDesc') {
             return (parseFloat(b.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
         } else {
