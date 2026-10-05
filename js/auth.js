@@ -28,21 +28,25 @@ function closeModal() {
 }
 
 function submitModalPassword() {
-    const inputPass = document.getElementById('modalPasswordInput').value;
+    const inputPass = document.getElementById('modalPasswordInput').value.trim();
     if (!pendingAction) return;
 
-    if (pendingAction.type === 'upload' || pendingAction.type === 'clear') {
+    // Capture pendingAction properties before closing the modal
+    const currentAction = pendingAction.type;
+    const currentEntity = pendingAction.entity;
+
+    if (currentAction === 'upload' || currentAction === 'clear') {
         if (inputPass === ADMIN_PASSWORD) {
             closeModal();
-            if (pendingAction.type === 'upload') document.getElementById('csvFileInput').click();
-            if (pendingAction.type === 'clear') executeClearData();
+            if (currentAction === 'upload') document.getElementById('csvFileInput').click();
+            if (currentAction === 'clear') executeClearData();
         } else {
             alert("Incorrect Admin Password.");
         }
-    } else if (pendingAction.type === 'unlock_entity') {
-        const requiredPass = ENTITY_PASSWORDS[pendingAction.entity] || ENTITY_PASSWORDS["default"];
+    } else if (currentAction === 'unlock_entity') {
+        const requiredPass = ENTITY_PASSWORDS[currentEntity] || ENTITY_PASSWORDS["default"];
         if (inputPass === requiredPass || inputPass === ADMIN_PASSWORD) {
-            activeUnlockedEntity = pendingAction.entity;
+            activeUnlockedEntity = currentEntity;
             closeModal();
             renderWarehouseFilter();
             renderProductLineFilter();
@@ -51,7 +55,7 @@ function submitModalPassword() {
         } else {
             alert("Incorrect Entity Password.");
         }
-    } else if (pendingAction.type === 'approve_entity') {
+    } else if (currentAction === 'approve_entity') {
         if (inputPass === ADMIN_PASSWORD) {
             isApprovalMode = true;
             closeModal();
