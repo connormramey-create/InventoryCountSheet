@@ -27,7 +27,7 @@ function handleFileSelect(event) {
         renderFilters();
         document.getElementById('filterCard').style.display = 'block';
         document.getElementById('dataCard').style.display = 'none';
-        event.target.value = ""; // Reset file input
+        event.target.value = "";
     };
     reader.readAsText(files[0]);
 }
@@ -68,20 +68,47 @@ function parseCSV(text) {
 }
 
 function detectColumnIndexes() {
+    // 1. Detect core metadata columns
     entityColIndex = rawHeaders.findIndex(h => /entity|brand/i.test(h));
     warehouseIdColIndex = rawHeaders.findIndex(h => /warehouse.*id|wh.*id/i.test(h));
     warehouseNameColIndex = rawHeaders.findIndex(h => /warehouse.*name|wh.*name/i.test(h));
     if (warehouseIdColIndex === -1 && warehouseNameColIndex === -1) {
         warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
+    } else {
+        warehouseColIndex = -1;
     }
-    productLineColIndex = rawHeaders.findIndex(h => /product.*line|prod.*line|category|type/i.test(h));
-    itemNameColIndex = rawHeaders.findIndex(h => /name|description|item|sku/i.test(h));
+    productLineColIndex = rawHeaders.findIndex(h => /product.*line|prod.*line|product.*type|category/i.test(h));
     startCountColIndex = rawHeaders.findIndex(h => /start.*count|system.*qty|qty.*on.*hand|beginning/i.test(h));
     countColIndex = rawHeaders.findIndex(h => /^count$|physical count|counted/i.test(h));
+
+    // 2. Track assigned metadata indexes
+    const assignedIndexes = new Set([
+        entityColIndex, 
+        warehouseIdColIndex, 
+        warehouseNameColIndex, 
+        warehouseColIndex, 
+        productLineColIndex, 
+        startCountColIndex, 
+        countColIndex
+    ].filter(idx => idx !== -1));
+
+    // 3. Find Item Name / Description column from remaining unassigned columns
+    itemNameColIndex = rawHeaders.findIndex((h, idx) => 
+        !assignedIndexes.has(idx) && /item.*name|product.*name|description|desc|sku|item.*desc|part.*number|item/i.test(h)
+    );
+
+    if (itemNameColIndex === -1) {
+        itemNameColIndex = rawHeaders.findIndex((h, idx) => 
+            !assignedIndexes.has(idx) && /name/i.test(h)
+        );
+    }
+
+    if (itemNameColIndex === -1) {
+        itemNameColIndex = rawHeaders.findIndex((_, idx) => !assignedIndexes.has(idx));
+    }
 }
 
 function saveData() {
-    // Save to LocalStorage as fallback
     localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
     localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
     localStorage.setItem("entity_workflows", JSON.stringify(entityWorkflowMap));
@@ -93,7 +120,7 @@ function saveData() {
             workflows: entityWorkflowMap
         }).catch((error) => {
             console.error("Firebase save error:", error);
-            alert("Firebase Warning: Could not save to cloud database (" + error.message + "). Check Firebase Rules.");
+            alert("Firebase Warning: Could not save to cloud database (" + error.message + ").");
         });
     }
 }
@@ -115,7 +142,6 @@ function exportToCSV() {
 }
 
 function executeClearData() {
-    // Clear LocalStorage in all cases
     localStorage.removeItem("inventory_data");
     localStorage.removeItem("inventory_headers");
     localStorage.removeItem("entity_workflows");
@@ -139,7 +165,7 @@ function executeClearData() {
             })
             .catch((error) => {
                 console.error("Firebase clear error:", error);
-                alert("Database Error: " + error.message + "\n\nPlease check your Firebase Realtime Database Security Rules.");
+                alert("Database Error: " + error.message);
             });
     } else {
         alert("Local inventory database cleared successfully.");
