@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Global Inventory Count Manager</title>
     
-    <!-- Firebase SDKs (Compat version for direct single-file script usage) -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -46,13 +46,6 @@
             padding: 16px;
             margin-bottom: 16px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .control-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: center;
         }
 
         label {
@@ -207,7 +200,7 @@
         <div class="filter-grid">
             <div>
                 <label for="entityFilter">Filter by Entity Name</label>
-                <select id="entityFilter" onchange="applyFilters()">
+                <select id="entityFilter" onchange="onEntityChange()">
                     <option value="">All Entities</option>
                 </select>
             </div>
@@ -278,13 +271,15 @@
 
     let rawHeaders = [];
     let inventoryData = [];
+    
     let entityColIndex = -1;
-    let warehouseColIndex = -1;
+    let warehouseIdColIndex = -1;
+    let warehouseNameColIndex = -1;
+    let warehouseColIndex = -1; // Fallback single warehouse column
     let countColIndex = -1;
 
     window.onload = function() {
         if (isGlobalSync && db) {
-            // Listen for global real-time updates from Firebase
             db.ref('inventory_data').on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (data && data.headers && data.items) {
@@ -296,7 +291,6 @@
                     document.getElementById('filterCard').style.display = 'block';
                     document.getElementById('dataCard').style.display = 'block';
                 } else if (!data) {
-                    // Database empty
                     inventoryData = [];
                     rawHeaders = [];
                     document.getElementById('filterCard').style.display = 'none';
@@ -304,7 +298,6 @@
                 }
             });
         } else {
-            // LocalStorage Fallback
             const savedData = localStorage.getItem("inventory_data");
             const savedHeaders = localStorage.getItem("inventory_headers");
             if (savedData && savedHeaders) {
@@ -325,7 +318,6 @@
         const files = event.target.files;
         if (!files.length) return;
 
-        // Reset all data on new import
         inventoryData = [];
         rawHeaders = [];
 
@@ -370,7 +362,6 @@
         rawHeaders = parsedRows[0];
         detectColumnIndexes();
 
-        // If no Count column exists, append one
         if (countColIndex === -1) {
             rawHeaders.push("Count");
             countColIndex = rawHeaders.length - 1;
@@ -391,37 +382,125 @@
 
     function detectColumnIndexes() {
         entityColIndex = rawHeaders.findIndex(h => /entity/i.test(h) || /brand/i.test(h));
-        warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
+        warehouseIdColIndex = rawHeaders.findIndex(h => /warehouse.*id|wh.*id|location.*id/i.test(h));
+        warehouseNameColIndex = rawHeaders.findIndex(h => /warehouse.*name|wh.*name|location.*name/i.test(h));
+
+        if (warehouseIdColIndex === -1 && warehouseNameColIndex === -1) {
+            warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
+        } else {
+            warehouseColIndex = -1;
+        }
+
         countColIndex = rawHeaders.findIndex(h => /^count$|physical count|counted/i.test(h));
     }
 
     function renderFilters() {
+        renderEntityFilter();
+        renderWarehouseFilter();
+    }
+
+    function renderEntityFilter() {
         const entitySelect = document.getElementById('entityFilter');
-        const warehouseSelect = document.getElementById('warehouseFilter');
+        const selectedEntity = entitySelect.value;
 
         const entities = new Set();
-        const warehouses = new Set();
-
         inventoryData.forEach(item => {
-            if (entityColIndex !== -1 && item.row[entityColIndex]) entities.add(item.row[entityColIndex]);
-            if (warehouseColIndex !== -1 && item.row[warehouseColIndex]) warehouses.add(item.row[warehouseColIndex]);
+            if (entityColIndex !== -1 && item.row[entityColIndex]) {
+                entities.add(item.row[entityColIndex]);
+            }
         });
 
         entitySelect.innerHTML = '<option value="">All Entities</option>';
-        entities.forEach(e => entitySelect.innerHTML += `<option value="${e}">${e}</option>`);
+        entities.forEach(e => {
+            const opt = document.createElement('option');
+            opt.value = e;
+            opt.textContent = e;
+            if (e === selectedEntity) opt.selected = true;
+            entitySelect.appendChild(opt);
+        });
+    }
+
+    function renderWarehouseFilter() {
+        const entitySelect = document.getElementById('entityFilter');
+        const warehouseSelect = document.getElementById('warehouseFilter');
+        const selectedEntity = entitySelect.value.toLowerCase();
+        const currentWh = warehouseSelect.value;
+
+        const warehouseMap = new Map();
+
+        inventoryData.forEach(item => {
+            const itemEntity = (entityColIndex !== -1 && item.row[entityColIndex]) ? item.row[entityColIndex] : "";
+            
+            // Limit to selected Entity
+            if (selectedEntity && itemEntity.toLowerCase() !== selectedEntity) {
+                return;
+            }
+
+            let whKey = "";
+            let whLabel = "";
+
+            if (warehouseIdColIndex !== -1 && warehouseNameColIndex !== -1) {
+                const id = item.row[warehouseIdColIndex] || "";
+                const name = item.row[warehouseNameColIndex] || "";
+                if (id || name) {
+                    whKey = `${id}___${name}`;
+                    whLabel = (id && name) ? `${id} - ${name}` : (id || name);
+                }
+            } else {
+                const idx = warehouseColIndex !== -1 ? warehouseColIndex : 
+                           (warehouseIdColIndex !== -1 ? warehouseIdColIndex : warehouseNameColIndex);
+                if (idx !== -1 && item.row[idx]) {
+                    whKey = item.row[idx];
+                    whLabel = item.row[idx];
+                }
+            }
+
+            if (whKey && !warehouseMap.has(whKey)) {
+                warehouseMap.set(whKey, whLabel);
+            }
+        });
 
         warehouseSelect.innerHTML = '<option value="">All Warehouses</option>';
-        warehouses.forEach(w => warehouseSelect.innerHTML += `<option value="${w}">${w}</option>`);
+        warehouseMap.forEach((label, key) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = label;
+            if (key === currentWh) opt.selected = true;
+            warehouseSelect.appendChild(opt);
+        });
+    }
+
+    function onEntityChange() {
+        renderWarehouseFilter();
+        applyFilters();
     }
 
     function applyFilters() {
         const selectedEntity = document.getElementById('entityFilter').value.toLowerCase();
-        const selectedWarehouse = document.getElementById('warehouseFilter').value.toLowerCase();
+        const selectedWarehouseKey = document.getElementById('warehouseFilter').value.toLowerCase();
         const searchQuery = document.getElementById('searchInput').value.toLowerCase();
 
         const filtered = inventoryData.filter(item => {
-            const matchesEntity = entityColIndex === -1 || !selectedEntity || (item.row[entityColIndex] && item.row[entityColIndex].toLowerCase() === selectedEntity);
-            const matchesWarehouse = warehouseColIndex === -1 || !selectedWarehouse || (item.row[warehouseColIndex] && item.row[warehouseColIndex].toLowerCase() === selectedWarehouse);
+            // Match Entity
+            const matchesEntity = entityColIndex === -1 || !selectedEntity || 
+                (item.row[entityColIndex] && item.row[entityColIndex].toLowerCase() === selectedEntity);
+
+            // Match Warehouse
+            let matchesWarehouse = true;
+            if (selectedWarehouseKey) {
+                if (warehouseIdColIndex !== -1 && warehouseNameColIndex !== -1) {
+                    const id = item.row[warehouseIdColIndex] || "";
+                    const name = item.row[warehouseNameColIndex] || "";
+                    const key = `${id}___${name}`.toLowerCase();
+                    matchesWarehouse = (key === selectedWarehouseKey);
+                } else {
+                    const idx = warehouseColIndex !== -1 ? warehouseColIndex : 
+                               (warehouseIdColIndex !== -1 ? warehouseIdColIndex : warehouseNameColIndex);
+                    matchesWarehouse = (idx === -1) || (item.row[idx] && item.row[idx].toLowerCase() === selectedWarehouseKey);
+                }
+            }
+
+            // Match Search
             const matchesSearch = !searchQuery || item.row.some(val => val.toLowerCase().includes(searchQuery));
 
             return matchesEntity && matchesWarehouse && matchesSearch;
@@ -439,17 +518,23 @@
 
         if (rawHeaders.length === 0) return;
 
+        // Render Column Headers (skipping Entity column to fit display)
         rawHeaders.forEach((h, index) => {
+            if (index === entityColIndex) return; // Exclude Entity Name column from display
+
             const th = document.createElement('th');
             th.textContent = h;
             if (index === countColIndex) th.className = "count-cell";
             headerRow.appendChild(th);
         });
 
+        // Render Body Rows (skipping Entity column to fit display)
         data.forEach(item => {
             const tr = document.createElement('tr');
 
             item.row.forEach((val, colIdx) => {
+                if (colIdx === entityColIndex) return; // Exclude Entity Name column from display
+
                 const td = document.createElement('td');
                 if (colIdx === countColIndex) {
                     td.className = "count-cell";
