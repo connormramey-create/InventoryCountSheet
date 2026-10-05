@@ -25,7 +25,10 @@ function handleFileSelect(event) {
         parseCSV(e.target.result);
         saveData();
         renderFilters();
+        
+        activeUnlockedEntity = "";
         document.getElementById('filterCard').style.display = 'block';
+        document.getElementById('entityPromptBanner').style.display = 'block';
         document.getElementById('dataCard').style.display = 'none';
         event.target.value = "";
     };
@@ -68,20 +71,28 @@ function parseCSV(text) {
 }
 
 function detectColumnIndexes() {
-    // 1. Detect core metadata columns
+    // 1. Detect Entity / Brand
     entityColIndex = rawHeaders.findIndex(h => /entity|brand/i.test(h));
-    warehouseIdColIndex = rawHeaders.findIndex(h => /warehouse.*id|wh.*id/i.test(h));
-    warehouseNameColIndex = rawHeaders.findIndex(h => /warehouse.*name|wh.*name/i.test(h));
+
+    // 2. Detect Warehouse ID & Name
+    warehouseIdColIndex = rawHeaders.findIndex(h => /warehouse.*id|wh.*id|location.*id/i.test(h));
+    warehouseNameColIndex = rawHeaders.findIndex(h => /warehouse.*name|wh.*name|location.*name/i.test(h));
     if (warehouseIdColIndex === -1 && warehouseNameColIndex === -1) {
         warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
     } else {
         warehouseColIndex = -1;
     }
-    productLineColIndex = rawHeaders.findIndex(h => /product.*line|prod.*line|product.*type|category/i.test(h));
-    startCountColIndex = rawHeaders.findIndex(h => /start.*count|system.*qty|qty.*on.*hand|beginning/i.test(h));
+
+    // 3. Detect Product Line / Category / Type
+    productLineColIndex = rawHeaders.findIndex(h => /product.*line|prod.*line|product.*type|prod.*type|category|type|line/i.test(h));
+
+    // 4. Detect Start of Count / System Qty
+    startCountColIndex = rawHeaders.findIndex(h => /start.*count|system.*qty|qty.*on.*hand|beginning|start/i.test(h));
+
+    // 5. Detect Physical Count
     countColIndex = rawHeaders.findIndex(h => /^count$|physical count|counted/i.test(h));
 
-    // 2. Track assigned metadata indexes
+    // 6. Track all assigned metadata indexes
     const assignedIndexes = new Set([
         entityColIndex, 
         warehouseIdColIndex, 
@@ -92,9 +103,9 @@ function detectColumnIndexes() {
         countColIndex
     ].filter(idx => idx !== -1));
 
-    // 3. Find Item Name / Description column from remaining unassigned columns
+    // 7. Find Item Name / Description (Must NOT be an already assigned metadata column)
     itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-        !assignedIndexes.has(idx) && /item.*name|product.*name|description|desc|sku|item.*desc|part.*number|item/i.test(h)
+        !assignedIndexes.has(idx) && /item.*name|product.*name|item.*desc|product.*desc|description|desc|item|sku|part/i.test(h)
     );
 
     if (itemNameColIndex === -1) {
@@ -156,6 +167,7 @@ function executeClearData() {
     if (entitySelect) entitySelect.value = "";
 
     document.getElementById('filterCard').style.display = 'none';
+    document.getElementById('entityPromptBanner').style.display = 'none';
     document.getElementById('dataCard').style.display = 'none';
 
     if (isGlobalSync && db) {
