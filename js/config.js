@@ -11,9 +11,24 @@ const firebaseConfig = {
 };
 
 // System Passwords
-const ADMIN_PASSWORD = "1234";
+const ADMIN_PASSWORD = "04052001";
 const ENTITY_PASSWORDS = {
-    "default": "1234"
+    "Native Grasses": "NG",
+    "Brookside": "BRK",
+    "Meehans": "MEE",
+    "LawnRX": "LRX",
+    "Gro-Masters": "GRO",
+    "Seacoast Turf": "TURF",
+    "Grasshopper Lawns": "GHP",
+    "Green Image": "GRI",
+    "Fairway": "FWY",
+    "Seacoast Tree": "TREE",
+    "Delaware Valley Turf": "DVT",
+    "Custom": "CLC",
+    "Green Machine": "GRM",
+    "Total Lawn Care": "TLC",
+    "Concord Custom Lawn Care": "CRD",
+    "Highest Quality": "HQL"
 };
 
 // Global Application State
