@@ -174,7 +174,7 @@ function applyFilters() {
         if (sortBy === 'productLine' && productLineColIndex !== -1) {
             return (a.row[productLineColIndex] || "").localeCompare(b.row[productLineColIndex] || "");
         } else if (sortBy === 'count') {
-            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(b.row[countColIndex]) || 0);
+            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
         } else if (sortBy === 'countDesc') {
             return (parseFloat(b.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
         } else {
@@ -296,9 +296,6 @@ function renderMobileCards(data) {
     data.forEach(item => {
         const itemName = (itemNameColIndex !== -1 && item.row[itemNameColIndex]) ? item.row[itemNameColIndex] : "Item Record";
         const productLine = (productLineColIndex !== -1 && item.row[productLineColIndex]) ? item.row[productLineColIndex] : "";
-        const warehouseName = (warehouseNameColIndex !== -1 && item.row[warehouseNameColIndex]) ? item.row[warehouseNameColIndex] : 
-                            (warehouseColIndex !== -1 && item.row[warehouseColIndex]) ? item.row[warehouseColIndex] : "";
-        const warehouseId = (warehouseIdColIndex !== -1 && item.row[warehouseIdColIndex]) ? item.row[warehouseIdColIndex] : "";
         const countVal = item.row[countColIndex] !== undefined ? item.row[countColIndex] : "";
         const startVal = (startCountColIndex !== -1 && item.row[startCountColIndex]) ? item.row[startCountColIndex] : "0";
 
@@ -315,13 +312,10 @@ function renderMobileCards(data) {
             `;
         }
 
-        let whDisplay = (warehouseId && warehouseName) ? `${warehouseId} - ${warehouseName}` : (warehouseId || warehouseName);
-
         card.innerHTML = `
             <div class="card-item-name">${itemName}</div>
             <div class="card-meta-row">
                 ${productLine ? `<span class="card-meta-tag">🏷️ ${productLine}</span>` : ''}
-                ${whDisplay ? `<span class="card-meta-tag">🏭 ${whDisplay}</span>` : ''}
             </div>
             <div class="card-count-bar">
                 ${startCountHTML || '<div class="count-title">Physical Count:</div>'}
