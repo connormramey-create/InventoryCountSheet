@@ -26,6 +26,8 @@ function handleFileSelect(event) {
         saveData();
         renderFilters();
         document.getElementById('filterCard').style.display = 'block';
+        document.getElementById('dataCard').style.display = 'none';
+        event.target.value = ""; // Reset file input
     };
     reader.readAsText(files[0]);
 }
@@ -79,16 +81,20 @@ function detectColumnIndexes() {
 }
 
 function saveData() {
+    // Save to LocalStorage as fallback
+    localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
+    localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
+    localStorage.setItem("entity_workflows", JSON.stringify(entityWorkflowMap));
+
     if (isGlobalSync && db) {
         db.ref('inventory_data').set({
             headers: rawHeaders,
             items: inventoryData,
             workflows: entityWorkflowMap
+        }).catch((error) => {
+            console.error("Firebase save error:", error);
+            alert("Firebase Warning: Could not save to cloud database (" + error.message + "). Check Firebase Rules.");
         });
-    } else {
-        localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
-        localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
-        localStorage.setItem("entity_workflows", JSON.stringify(entityWorkflowMap));
     }
 }
 
@@ -109,15 +115,33 @@ function exportToCSV() {
 }
 
 function executeClearData() {
-    if (isGlobalSync && db) {
-        db.ref('inventory_data').remove();
-    } else {
-        localStorage.clear();
-    }
+    // Clear LocalStorage in all cases
+    localStorage.removeItem("inventory_data");
+    localStorage.removeItem("inventory_headers");
+    localStorage.removeItem("entity_workflows");
+
     inventoryData = [];
     rawHeaders = [];
     entityWorkflowMap = {};
+    activeUnlockedEntity = "";
+    isApprovalMode = false;
+
+    const entitySelect = document.getElementById('entityFilter');
+    if (entitySelect) entitySelect.value = "";
+
     document.getElementById('filterCard').style.display = 'none';
     document.getElementById('dataCard').style.display = 'none';
-    alert("Inventory database cleared successfully.");
+
+    if (isGlobalSync && db) {
+        db.ref('inventory_data').remove()
+            .then(() => {
+                alert("Inventory database cleared successfully across all devices.");
+            })
+            .catch((error) => {
+                console.error("Firebase clear error:", error);
+                alert("Database Error: " + error.message + "\n\nPlease check your Firebase Realtime Database Security Rules.");
+            });
+    } else {
+        alert("Local inventory database cleared successfully.");
+    }
 }
