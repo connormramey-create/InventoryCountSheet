@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Inventory Count Manager</title>
+    <title>Global Inventory Count Manager</title>
+    
+    <!-- Firebase SDKs (Compat version for direct single-file script usage) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
     <style>
         :root {
             --primary-color: #007aff;
@@ -12,6 +17,7 @@
             --border-color: #e5e5ea;
             --text-color: #000000;
             --subtext-color: #8e8e93;
+            --badge-bg: #e5f1ff;
         }
 
         body {
@@ -24,7 +30,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
@@ -75,13 +81,7 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            width: 100%;
             text-align: center;
-        }
-
-        .btn:disabled {
-            background-color: var(--subtext-color);
-            opacity: 0.6;
         }
 
         .btn-secondary {
@@ -94,7 +94,7 @@
 
         .filter-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px;
         }
 
@@ -113,6 +113,7 @@
             padding: 10px 12px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
         }
 
         th {
@@ -122,6 +123,7 @@
 
         .count-cell {
             width: 140px;
+            background-color: #f0f7ff;
         }
 
         .count-controls {
@@ -138,6 +140,7 @@
             text-align: center;
             border: 2px solid var(--primary-color);
             border-radius: 8px;
+            background-color: #fff;
         }
 
         .step-btn {
@@ -152,6 +155,7 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            user-select: none;
         }
 
         .stats-bar {
@@ -161,19 +165,40 @@
             color: var(--subtext-color);
             margin-bottom: 8px;
         }
+
+        .sync-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .sync-online {
+            background-color: #e3fae6;
+            color: #1b8a2e;
+        }
+
+        .sync-local {
+            background-color: #fff3cd;
+            color: #856404;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📦 Inventory Count Tool</h1>
+    <h1>📦 Inventory Count Manager</h1>
 
     <!-- File Upload Section -->
     <div class="card">
-        <label for="csvFileInput">Import CSV Files (Multiple Brands/Warehouses)</label>
-        <input type="file" id="csvFileInput" accept=".csv" multiple>
-        <p style="font-size: 12px; color: var(--subtext-color); margin-top: 6px;">
-            You can select multiple CSV files at once or append files progressively.
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label for="csvFileInput" style="margin: 0;">Import CSV File (Resets Existing Inventory)</label>
+            <span id="syncStatus" class="sync-badge sync-local">Mode: Local Storage</span>
+        </div>
+        <input type="file" id="csvFileInput" accept=".csv">
+        <p style="font-size: 12px; color: var(--subtext-color); margin-top: 6px; margin-bottom: 0;">
+            Uploading a new CSV file will clear previous inventory data globally and load the new records.
         </p>
     </div>
 
@@ -181,20 +206,20 @@
     <div class="card" id="filterCard" style="display: none;">
         <div class="filter-grid">
             <div>
-                <label for="brandFilter">Filter by Brand</label>
-                <select id="brandFilter" onchange="applyFilters()">
-                    <option value="">All Brands</option>
+                <label for="entityFilter">Filter by Entity Name</label>
+                <select id="entityFilter" onchange="applyFilters()">
+                    <option value="">All Entities</option>
                 </select>
             </div>
             <div>
-                <label for="warehouseFilter">Filter by Warehouse</label>
+                <label for="warehouseFilter">Filter by Warehouse ID / Name</label>
                 <select id="warehouseFilter" onchange="applyFilters()">
                     <option value="">All Warehouses</option>
                 </select>
             </div>
             <div>
-                <label for="searchInput">Search SKU / Item</label>
-                <input type="text" id="searchInput" placeholder="Type SKU or Name..." oninput="applyFilters()">
+                <label for="searchInput">Search Columns</label>
+                <input type="text" id="searchInput" placeholder="Search SKU, Description, etc..." oninput="applyFilters()">
             </div>
         </div>
     </div>
@@ -207,44 +232,90 @@
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-            <button class="btn btn-secondary" onclick="exportToCSV()">Export Updated CSV</button>
-            <button class="btn btn-danger" style="width: 120px;" onclick="clearData()">Clear All</button>
+            <button class="btn btn-secondary" style="flex: 1;" onclick="exportToCSV()">Export Updated CSV</button>
+            <button class="btn btn-danger" onclick="clearData()">Clear All Data</button>
         </div>
 
         <div class="table-wrapper">
             <table>
                 <thead>
-                    <tr id="tableHeader">
-                        <!-- Dynamic Columns -->
-                    </tr>
+                    <tr id="tableHeader"></tr>
                 </thead>
-                <tbody id="tableBody">
-                    <!-- Dynamic Rows -->
-                </tbody>
+                <tbody id="tableBody"></tbody>
             </table>
         </div>
     </div>
 </div>
 
 <script>
+    // --- YOUR FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAr4TWWOk730S44i5DZCC_HhZdG664poDo",
+        authDomain: "inventory-tracker-61964.firebaseapp.com",
+        databaseURL: "https://inventory-tracker-61964-default-rtdb.firebaseio.com",
+        projectId: "inventory-tracker-61964",
+        storageBucket: "inventory-tracker-61964.firebasestorage.app",
+        messagingSenderId: "563347696662",
+        appId: "1:563347696662:web:3d355a2062c44b8690d937",
+        measurementId: "G-CL9645DXP0"
+    };
+
+    let db = null;
+    let isGlobalSync = false;
+
+    // Initialize Firebase
+    if (firebaseConfig.databaseURL && firebaseConfig.databaseURL !== "") {
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            isGlobalSync = true;
+            document.getElementById('syncStatus').textContent = "Mode: Global Sync (Realtime)";
+            document.getElementById('syncStatus').className = "sync-badge sync-online";
+        } catch (e) {
+            console.warn("Firebase initialization failed, falling back to LocalStorage.", e);
+        }
+    }
+
     let rawHeaders = [];
     let inventoryData = [];
-    let brandColIndex = -1;
+    let entityColIndex = -1;
     let warehouseColIndex = -1;
     let countColIndex = -1;
 
-    // Load persisted data on launch
     window.onload = function() {
-        const savedData = localStorage.getItem("inventory_data");
-        const savedHeaders = localStorage.getItem("inventory_headers");
-        if (savedData && savedHeaders) {
-            inventoryData = JSON.parse(savedData);
-            rawHeaders = JSON.parse(savedHeaders);
-            detectColumnIndexes();
-            renderFilters();
-            renderTable(inventoryData);
-            document.getElementById('filterCard').style.display = 'block';
-            document.getElementById('dataCard').style.display = 'block';
+        if (isGlobalSync && db) {
+            // Listen for global real-time updates from Firebase
+            db.ref('inventory_data').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && data.headers && data.items) {
+                    rawHeaders = data.headers;
+                    inventoryData = data.items;
+                    detectColumnIndexes();
+                    renderFilters();
+                    applyFilters();
+                    document.getElementById('filterCard').style.display = 'block';
+                    document.getElementById('dataCard').style.display = 'block';
+                } else if (!data) {
+                    // Database empty
+                    inventoryData = [];
+                    rawHeaders = [];
+                    document.getElementById('filterCard').style.display = 'none';
+                    document.getElementById('dataCard').style.display = 'none';
+                }
+            });
+        } else {
+            // LocalStorage Fallback
+            const savedData = localStorage.getItem("inventory_data");
+            const savedHeaders = localStorage.getItem("inventory_headers");
+            if (savedData && savedHeaders) {
+                inventoryData = JSON.parse(savedData);
+                rawHeaders = JSON.parse(savedHeaders);
+                detectColumnIndexes();
+                renderFilters();
+                applyFilters();
+                document.getElementById('filterCard').style.display = 'block';
+                document.getElementById('dataCard').style.display = 'block';
+            }
         }
     };
 
@@ -254,29 +325,26 @@
         const files = event.target.files;
         if (!files.length) return;
 
-        let filesRead = 0;
-        Array.from(files).forEach(file => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                parseCSV(e.target.result);
-                filesRead++;
-                if (filesRead === files.length) {
-                    saveToLocalStorage();
-                    renderFilters();
-                    applyFilters();
-                    document.getElementById('filterCard').style.display = 'block';
-                    document.getElementById('dataCard').style.display = 'block';
-                }
-            };
-            reader.readAsText(file);
-        });
+        // Reset all data on new import
+        inventoryData = [];
+        rawHeaders = [];
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            parseCSV(e.target.result);
+            saveData();
+            renderFilters();
+            applyFilters();
+            document.getElementById('filterCard').style.display = 'block';
+            document.getElementById('dataCard').style.display = 'block';
+        };
+        reader.readAsText(files[0]);
     }
 
     function parseCSV(text) {
         const lines = text.split(/\r\n|\n/);
         if (lines.length === 0) return;
 
-        // Simple CSV parser handling quotes
         const parseLine = (line) => {
             const row = [];
             let insideQuotes = false;
@@ -299,68 +367,64 @@
         const parsedRows = lines.map(l => l.trim()).filter(l => l.length > 0).map(parseLine);
         if (parsedRows.length === 0) return;
 
-        if (rawHeaders.length === 0) {
-            rawHeaders = parsedRows[0];
-            detectColumnIndexes();
-            if (countColIndex === -1) {
-                rawHeaders.push("Physical Count");
-                countColIndex = rawHeaders.length - 1;
-            }
+        rawHeaders = parsedRows[0];
+        detectColumnIndexes();
+
+        // If no Count column exists, append one
+        if (countColIndex === -1) {
+            rawHeaders.push("Count");
+            countColIndex = rawHeaders.length - 1;
         }
 
-        const dataRows = (rawHeaders.length === parsedRows[0].length && parsedRows[0][0] === rawHeaders[0]) 
-            ? parsedRows.slice(1) 
-            : parsedRows;
+        const dataRows = parsedRows.slice(1);
 
         dataRows.forEach((row, idx) => {
-            // Normalize row length to match headers
             while (row.length < rawHeaders.length) {
                 row.push("");
             }
             inventoryData.push({
-                id: Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+                id: "item_" + idx + "_" + Date.now(),
                 row: row
             });
         });
     }
 
     function detectColumnIndexes() {
-        brandColIndex = rawHeaders.findIndex(h => /brand/i.test(h));
-        warehouseColIndex = rawHeaders.findIndex(h => /warehouse|location|wh/i.test(h));
-        countColIndex = rawHeaders.findIndex(h => /physical count|count|counted/i.test(h));
+        entityColIndex = rawHeaders.findIndex(h => /entity/i.test(h) || /brand/i.test(h));
+        warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
+        countColIndex = rawHeaders.findIndex(h => /^count$|physical count|counted/i.test(h));
     }
 
     function renderFilters() {
-        const brandSelect = document.getElementById('brandFilter');
+        const entitySelect = document.getElementById('entityFilter');
         const warehouseSelect = document.getElementById('warehouseFilter');
 
-        const brands = new Set();
+        const entities = new Set();
         const warehouses = new Set();
 
         inventoryData.forEach(item => {
-            if (brandColIndex !== -1 && item.row[brandColIndex]) brands.add(item.row[brandColIndex]);
+            if (entityColIndex !== -1 && item.row[entityColIndex]) entities.add(item.row[entityColIndex]);
             if (warehouseColIndex !== -1 && item.row[warehouseColIndex]) warehouses.add(item.row[warehouseColIndex]);
         });
 
-        brandSelect.innerHTML = '<option value="">All Brands</option>';
-        brands.forEach(b => brandSelect.innerHTML += `<option value="${b}">${b}</option>`);
+        entitySelect.innerHTML = '<option value="">All Entities</option>';
+        entities.forEach(e => entitySelect.innerHTML += `<option value="${e}">${e}</option>`);
 
         warehouseSelect.innerHTML = '<option value="">All Warehouses</option>';
         warehouses.forEach(w => warehouseSelect.innerHTML += `<option value="${w}">${w}</option>`);
     }
 
     function applyFilters() {
-        const selectedBrand = document.getElementById('brandFilter').value.toLowerCase();
+        const selectedEntity = document.getElementById('entityFilter').value.toLowerCase();
         const selectedWarehouse = document.getElementById('warehouseFilter').value.toLowerCase();
         const searchQuery = document.getElementById('searchInput').value.toLowerCase();
 
         const filtered = inventoryData.filter(item => {
-            const matchesBrand = brandColIndex === -1 || !selectedBrand || (item.row[brandColIndex] && item.row[brandColIndex].toLowerCase() === selectedBrand);
+            const matchesEntity = entityColIndex === -1 || !selectedEntity || (item.row[entityColIndex] && item.row[entityColIndex].toLowerCase() === selectedEntity);
             const matchesWarehouse = warehouseColIndex === -1 || !selectedWarehouse || (item.row[warehouseColIndex] && item.row[warehouseColIndex].toLowerCase() === selectedWarehouse);
-            
             const matchesSearch = !searchQuery || item.row.some(val => val.toLowerCase().includes(searchQuery));
 
-            return matchesBrand && matchesWarehouse && matchesSearch;
+            return matchesEntity && matchesWarehouse && matchesSearch;
         });
 
         renderTable(filtered);
@@ -375,7 +439,6 @@
 
         if (rawHeaders.length === 0) return;
 
-        // Render Headers
         rawHeaders.forEach((h, index) => {
             const th = document.createElement('th');
             th.textContent = h;
@@ -383,7 +446,6 @@
             headerRow.appendChild(th);
         });
 
-        // Render Body Rows
         data.forEach(item => {
             const tr = document.createElement('tr');
 
@@ -412,7 +474,6 @@
             tbody.appendChild(tr);
         });
 
-        // Update statistics
         document.getElementById('recordCount').textContent = `Total Items: ${inventoryData.length}`;
         const counted = inventoryData.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
         document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
@@ -422,7 +483,7 @@
         const item = inventoryData.find(i => i.id === id);
         if (item) {
             item.row[countColIndex] = value;
-            saveToLocalStorage();
+            saveData();
             const counted = inventoryData.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
             document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
         }
@@ -435,26 +496,30 @@
             if (isNaN(current)) current = 0;
             const updated = Math.max(0, current + delta);
             item.row[countColIndex] = updated.toString();
-            saveToLocalStorage();
+            saveData();
             applyFilters();
         }
     }
 
-    function saveToLocalStorage() {
-        localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
-        localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
+    function saveData() {
+        if (isGlobalSync && db) {
+            db.ref('inventory_data').set({
+                headers: rawHeaders,
+                items: inventoryData
+            });
+        } else {
+            localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
+            localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
+        }
     }
 
     function exportToCSV() {
         if (inventoryData.length === 0) return;
 
         let csvContent = "data:text/csv;charset=utf-8,";
-        
-        // Escape quotes for CSV format
         const formatCSVRow = (arr) => arr.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
 
         csvContent += formatCSVRow(rawHeaders) + "\r\n";
-
         inventoryData.forEach(item => {
             csvContent += formatCSVRow(item.row) + "\r\n";
         });
@@ -470,8 +535,12 @@
 
     function clearData() {
         if (confirm("Are you sure you want to clear all loaded inventory data?")) {
-            localStorage.removeItem("inventory_data");
-            localStorage.removeItem("inventory_headers");
+            if (isGlobalSync && db) {
+                db.ref('inventory_data').remove();
+            } else {
+                localStorage.removeItem("inventory_data");
+                localStorage.removeItem("inventory_headers");
+            }
             inventoryData = [];
             rawHeaders = [];
             document.getElementById('filterCard').style.display = 'none';
