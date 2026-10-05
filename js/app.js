@@ -2,7 +2,6 @@ window.onload = function() {
     initStorageAndSync();
 
     if (isGlobalSync && db) {
-        // Realtime listener for Firebase synchronization
         db.ref('inventory_data').on('value', (snapshot) => {
             const data = snapshot.val();
             if (data && data.headers && data.items) {
@@ -11,15 +10,20 @@ window.onload = function() {
                 entityWorkflowMap = data.workflows || {};
                 detectColumnIndexes();
                 renderFilters();
+                
                 document.getElementById('filterCard').style.display = 'block';
 
-                // Re-render active list if an entity is currently unlocked
                 if (activeUnlockedEntity) {
+                    renderWarehouseFilter();
+                    renderProductLineFilter();
                     applyFilters();
+                    document.getElementById('entityPromptBanner').style.display = 'none';
                     document.getElementById('dataCard').style.display = 'block';
+                } else {
+                    document.getElementById('entityPromptBanner').style.display = 'block';
+                    document.getElementById('dataCard').style.display = 'none';
                 }
             } else {
-                // DATA CLEARED OR EMPTY: Reset UI state completely
                 inventoryData = [];
                 rawHeaders = [];
                 entityWorkflowMap = {};
@@ -30,11 +34,11 @@ window.onload = function() {
                 if (entitySelect) entitySelect.value = "";
 
                 document.getElementById('filterCard').style.display = 'none';
+                document.getElementById('entityPromptBanner').style.display = 'none';
                 document.getElementById('dataCard').style.display = 'none';
             }
         });
     } else {
-        // LocalStorage fallback
         const savedData = localStorage.getItem("inventory_data");
         const savedHeaders = localStorage.getItem("inventory_headers");
         const savedWorkflows = localStorage.getItem("entity_workflows");
@@ -44,7 +48,9 @@ window.onload = function() {
             entityWorkflowMap = savedWorkflows ? JSON.parse(savedWorkflows) : {};
             detectColumnIndexes();
             renderFilters();
+            
             document.getElementById('filterCard').style.display = 'block';
+            document.getElementById('entityPromptBanner').style.display = 'block';
         }
     }
 };
@@ -53,13 +59,20 @@ function renderFilters() {
     const entitySelect = document.getElementById('entityFilter');
     const entities = new Set();
     inventoryData.forEach(item => {
-        if (entityColIndex !== -1 && item.row[entityColIndex]) entities.add(item.row[entityColIndex]);
+        if (entityColIndex !== -1 && item.row[entityColIndex]) entities.add(item.row[entityColIndex].trim());
     });
+
+    const selectedVal = activeUnlockedEntity || entitySelect.value;
 
     entitySelect.innerHTML = '<option value="">Select Entity...</option>';
     entities.forEach(e => {
-        entitySelect.innerHTML += `<option value="${e}">${e}</option>`;
+        const isSelected = (e === selectedVal) ? 'selected' : '';
+        entitySelect.innerHTML += `<option value="${e}" ${isSelected}>${e}</option>`;
     });
+
+    if (selectedVal && entities.has(selectedVal)) {
+        entitySelect.value = selectedVal;
+    }
 }
 
 function onEntityFilterChange() {
@@ -68,6 +81,7 @@ function onEntityFilterChange() {
     
     if (!selectedEntity) {
         activeUnlockedEntity = "";
+        document.getElementById('entityPromptBanner').style.display = 'block';
         document.getElementById('dataCard').style.display = 'none';
         return;
     }
@@ -78,6 +92,8 @@ function onEntityFilterChange() {
         renderWarehouseFilter();
         renderProductLineFilter();
         applyFilters();
+        document.getElementById('entityPromptBanner').style.display = 'none';
+        document.getElementById('dataCard').style.display = 'block';
     }
 }
 
@@ -88,7 +104,7 @@ function renderWarehouseFilter() {
 
     inventoryData.forEach(item => {
         const itemEntity = (entityColIndex !== -1 && item.row[entityColIndex]) ? item.row[entityColIndex] : "";
-        if (selectedEntity && itemEntity.toLowerCase() !== selectedEntity) return;
+        if (selectedEntity && itemEntity.trim().toLowerCase() !== selectedEntity) return;
 
         let key = "", label = "";
         if (warehouseIdColIndex !== -1 && warehouseNameColIndex !== -1) {
@@ -113,10 +129,10 @@ function renderProductLineFilter() {
 
     inventoryData.forEach(item => {
         const itemEntity = (entityColIndex !== -1 && item.row[entityColIndex]) ? item.row[entityColIndex] : "";
-        if (selectedEntity && itemEntity.toLowerCase() !== selectedEntity) return;
+        if (selectedEntity && itemEntity.trim().toLowerCase() !== selectedEntity) return;
 
         if (productLineColIndex !== -1 && item.row[productLineColIndex]) {
-            productLines.add(item.row[productLineColIndex]);
+            productLines.add(item.row[productLineColIndex].trim());
         }
     });
 
@@ -127,14 +143,14 @@ function renderProductLineFilter() {
 function applyFilters() {
     if (!activeUnlockedEntity) return;
 
-    const selectedEntity = activeUnlockedEntity.toLowerCase();
+    const selectedEntity = activeUnlockedEntity.trim().toLowerCase();
     const selectedWhKey = document.getElementById('warehouseFilter').value.toLowerCase();
     const selectedPL = document.getElementById('productLineFilter').value.toLowerCase();
     const sortBy = document.getElementById('sortBySelect').value;
     const searchQuery = document.getElementById('searchInput').value.toLowerCase();
 
     let filtered = inventoryData.filter(item => {
-        const matchesEntity = entityColIndex === -1 || (item.row[entityColIndex] && item.row[entityColIndex].toLowerCase() === selectedEntity);
+        const matchesEntity = entityColIndex === -1 || (item.row[entityColIndex] && item.row[entityColIndex].trim().toLowerCase() === selectedEntity);
         
         let matchesWh = true;
         if (selectedWhKey) {
@@ -148,7 +164,7 @@ function applyFilters() {
             }
         }
 
-        const matchesPL = productLineColIndex === -1 || !selectedPL || (item.row[productLineColIndex] && item.row[productLineColIndex].toLowerCase() === selectedPL);
+        const matchesPL = productLineColIndex === -1 || !selectedPL || (item.row[productLineColIndex] && item.row[productLineColIndex].trim().toLowerCase() === selectedPL);
         const matchesSearch = !searchQuery || item.row.some(val => val.toLowerCase().includes(searchQuery));
 
         return matchesEntity && matchesWh && matchesPL && matchesSearch;
@@ -308,7 +324,7 @@ function renderMobileCards(data) {
                 ${whDisplay ? `<span class="card-meta-tag">🏭 ${whDisplay}</span>` : ''}
             </div>
             <div class="card-count-bar">
-                ${startCountHTML || '<div>Count Input:</div>'}
+                ${startCountHTML || '<div class="count-title">Physical Count:</div>'}
                 <div class="count-controls">
                     <button class="step-btn" ${isLocked ? 'disabled' : ''} onclick="adjustCount('${item.id}', -1)">-</button>
                     <input type="number" inputmode="numeric" class="count-input" value="${countVal}" ${isLocked ? 'disabled' : ''} onchange="updateCount('${item.id}', this.value)" />
@@ -318,4 +334,30 @@ function renderMobileCards(data) {
         `;
         container.appendChild(card);
     });
+}
+
+function updateStats(data) {
+    document.getElementById('recordCount').textContent = `Total Items: ${data.length}`;
+    const counted = data.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
+    document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
+}
+
+function updateCount(id, value) {
+    const item = inventoryData.find(i => i.id === id);
+    if (item) {
+        item.row[countColIndex] = value;
+        saveData();
+        applyFilters();
+    }
+}
+
+function adjustCount(id, delta) {
+    const item = inventoryData.find(i => i.id === id);
+    if (item) {
+        let current = parseInt(item.row[countColIndex], 10);
+        if (isNaN(current)) current = 0;
+        item.row[countColIndex] = Math.max(0, current + delta).toString();
+        saveData();
+        applyFilters();
+    }
 }
