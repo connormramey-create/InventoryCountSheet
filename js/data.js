@@ -103,14 +103,20 @@ function detectColumnIndexes() {
         countColIndex
     ].filter(idx => idx !== -1));
 
-    // 7. Find Item Name / Description (Must NOT be an already assigned metadata column)
+    // 7. Find Item Name / Description (Prioritize exact "Name" or "Description" over SKU/ID codes)
     itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-        !assignedIndexes.has(idx) && /item.*name|product.*name|item.*desc|product.*desc|description|desc|item|sku|part/i.test(h)
+        !assignedIndexes.has(idx) && /^name$\vert{}^item\s*name$|^product\s*name$\vert{}^description$/i.test(h.trim())
     );
 
     if (itemNameColIndex === -1) {
         itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-            !assignedIndexes.has(idx) && /name/i.test(h)
+            !assignedIndexes.has(idx) && /item.*name|product.*name|item.*desc|product.*desc|description|desc|name/i.test(h.trim())
+        );
+    }
+
+    if (itemNameColIndex === -1) {
+        itemNameColIndex = rawHeaders.findIndex((h, idx) => 
+            !assignedIndexes.has(idx) && /item|sku|part/i.test(h.trim())
         );
     }
 
