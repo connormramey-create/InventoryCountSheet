@@ -174,7 +174,7 @@ function applyFilters() {
         if (sortBy === 'productLine' && productLineColIndex !== -1) {
             return (a.row[productLineColIndex] || "").localeCompare(b.row[productLineColIndex] || "");
         } else if (sortBy === 'count') {
-            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
+            return (parseFloat(a.row[countColIndex]) || 0) - (parseFloat(b.row[countColIndex]) || 0);
         } else if (sortBy === 'countDesc') {
             return (parseFloat(b.row[countColIndex]) || 0) - (parseFloat(a.row[countColIndex]) || 0);
         } else {
@@ -218,6 +218,9 @@ function renderWorkflowHeader() {
 
 function setEntityStatus(status) {
     entityWorkflowMap[activeUnlockedEntity] = { status: status, updatedAt: new Date().toISOString() };
+    if (status === 'Draft') {
+        isApprovalMode = false;
+    }
     saveData();
     applyFilters();
 }
@@ -229,7 +232,7 @@ function renderTable(data) {
     tbody.innerHTML = '';
 
     const entityState = entityWorkflowMap[activeUnlockedEntity] || { status: 'Draft' };
-    const isLocked = (entityState.status === 'Submitted' || entityState.status === 'Approved') && !isApprovalMode;
+    const isLocked = entityState.status === 'Submitted' || entityState.status === 'Approved' || isApprovalMode;
 
     rawHeaders.forEach((h, index) => {
         if (index === entityColIndex) return;
@@ -259,7 +262,7 @@ function renderTable(data) {
                 td.innerHTML = `
                     <div class="count-controls">
                         <button class="step-btn" ${isLocked ? 'disabled' : ''} onclick="adjustCount('${item.id}', -1)">-</button>
-                        <input type="number" inputmode="numeric" class="count-input" value="${countVal}" ${isLocked ? 'disabled' : ''} onchange="updateCount('${item.id}', this.value)" />
+                        <input type="number" inputmode="numeric" min="0" class="count-input" value="${countVal}" ${isLocked ? 'disabled' : ''} onchange="updateCount('${item.id}', this.value)" />
                         <button class="step-btn" ${isLocked ? 'disabled' : ''} onclick="adjustCount('${item.id}', 1)">+</button>
                     </div>
                 `;
@@ -291,7 +294,7 @@ function renderMobileCards(data) {
     container.innerHTML = '';
 
     const entityState = entityWorkflowMap[activeUnlockedEntity] || { status: 'Draft' };
-    const isLocked = (entityState.status === 'Submitted' || entityState.status === 'Approved') && !isApprovalMode;
+    const isLocked = entityState.status === 'Submitted' || entityState.status === 'Approved' || isApprovalMode;
 
     data.forEach(item => {
         const itemName = (itemNameColIndex !== -1 && item.row[itemNameColIndex]) ? item.row[itemNameColIndex] : "Item Record";
@@ -307,7 +310,7 @@ function renderMobileCards(data) {
             const variance = (parseFloat(countVal) || 0) - (parseFloat(startVal) || 0);
             startCountHTML = `
                 <div class="card-start-count">
-                    Start Qty: <strong>${startVal}</strong> | Var: <span style="color: ${variance === 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${variance > 0 ? '+' + variance : variance}</span>
+                    On Hand: <strong>${startVal}</strong> | Var: <span style="color: ${variance === 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${variance > 0 ? '+' + variance : variance}</span>
                 </div>
             `;
         }
@@ -321,7 +324,7 @@ function renderMobileCards(data) {
                 ${startCountHTML || '<div class="count-title">Physical Count:</div>'}
                 <div class="count-controls">
                     <button class="step-btn" ${isLocked ? 'disabled' : ''} onclick="adjustCount('${item.id}', -1)">-</button>
-                    <input type="number" inputmode="numeric" class="count-input" value="${countVal}" ${isLocked ? 'disabled' : ''} onchange="updateCount('${item.id}', this.value)" />
+                    <input type="number" inputmode="numeric" min="0" class="count-input" value="${countVal}" ${isLocked ? 'disabled' : ''} onchange="updateCount('${item.id}', this.value)" />
                     <button class="step-btn" ${isLocked ? 'disabled' : ''} onclick="adjustCount('${item.id}', 1)">+</button>
                 </div>
             </div>
@@ -334,24 +337,4 @@ function updateStats(data) {
     document.getElementById('recordCount').textContent = `Total Items: ${data.length}`;
     const counted = data.filter(i => i.row[countColIndex] !== "" && i.row[countColIndex] !== null && !isNaN(i.row[countColIndex])).length;
     document.getElementById('countedCount').textContent = `Items Counted: ${counted}`;
-}
-
-function updateCount(id, value) {
-    const item = inventoryData.find(i => i.id === id);
-    if (item) {
-        item.row[countColIndex] = value;
-        saveData();
-        applyFilters();
-    }
-}
-
-function adjustCount(id, delta) {
-    const item = inventoryData.find(i => i.id === id);
-    if (item) {
-        let current = parseInt(item.row[countColIndex], 10);
-        if (isNaN(current)) current = 0;
-        item.row[countColIndex] = Math.max(0, current + delta).toString();
-        saveData();
-        applyFilters();
-    }
 }
