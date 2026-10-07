@@ -1,3 +1,4 @@
+// --- STORAGE & SYNC INITIALIZATION ---
 function initStorageAndSync() {
     if (firebaseConfig.databaseURL && firebaseConfig.databaseURL !== "") {
         try {
@@ -25,12 +26,7 @@ function handleFileSelect(event) {
         parseCSV(e.target.result);
         saveData();
         renderFilters();
-        
-        activeUnlockedEntity = "";
         document.getElementById('filterCard').style.display = 'block';
-        document.getElementById('entityPromptBanner').style.display = 'block';
-        document.getElementById('dataCard').style.display = 'none';
-        event.target.value = "";
     };
     reader.readAsText(files[0]);
 }
@@ -71,121 +67,154 @@ function parseCSV(text) {
 }
 
 function detectColumnIndexes() {
-    // 1. Detect Entity / Brand
-    entityColIndex = rawHeaders.findIndex(h => /entity|brand/i.test(h));
+    const assigned = new Set();
 
-    // 2. Detect Warehouse ID & Name
-    warehouseIdColIndex = rawHeaders.findIndex(h => /warehouse.*id|wh.*id|location.*id/i.test(h));
-    warehouseNameColIndex = rawHeaders.findIndex(h => /warehouse.*name|wh.*name|location.*name/i.test(h));
+    // 1. Detect Entity / Brand
+    entityColIndex = rawHeaders.findIndex((h, idx) => !assigned.has(idx) && /entity|brand/i.test(h));
+    if (entityColIndex !== -1) assigned.add(entityColIndex);
+
+    // 2. Detect Warehouse ID
+    warehouseIdColIndex = rawHeaders.findIndex((h, idx) => !assigned.has(idx) && /warehouse.*id|wh.*id|location.*id/i.test(h));
+    if (warehouseIdColIndex !== -1) assigned.add(warehouseIdColIndex);
+
+    // 3. Detect Warehouse Name
+    warehouseNameColIndex = rawHeaders.findIndex((h, idx) => 
+        !assigned.has(idx) && /warehouse.*name|wh.*name|location.*name/i.test(h)
+    );
+
+    if (warehouseNameColIndex === -1 && warehouseIdColIndex !== -1 && warehouseIdColIndex + 1 < rawHeaders.length) {
+        const nextHeader = rawHeaders[warehouseIdColIndex + 1].trim();
+        if (/^name$/i.test(nextHeader) && !assigned.has(warehouseIdColIndex + 1)) {
+            warehouseNameColIndex = warehouseIdColIndex + 1;
+        }
+    }
+    if (warehouseNameColIndex !== -1) assigned.add(warehouseNameColIndex);
+
     if (warehouseIdColIndex === -1 && warehouseNameColIndex === -1) {
-        warehouseColIndex = rawHeaders.findIndex(h => /warehouse|wh|location/i.test(h));
+        warehouseColIndex = rawHeaders.findIndex((h, idx) => !assigned.has(idx) && /warehouse|wh|location/i.test(h));
+        if (warehouseColIndex !== -1) assigned.add(warehouseColIndex);
     } else {
         warehouseColIndex = -1;
     }
 
-    // 3. Detect Product Line / Category / Type
-    productLineColIndex = rawHeaders.findIndex(h => /product.*line|prod.*line|product.*type|prod.*type|category|type|line/i.test(h));
+    // 4. Detect Product Line / Category / Type
+    productLineColIndex = rawHeaders.findIndex((h, idx) => 
+        !assigned.has(idx) && /product.*line|prod.*line|product.*type|prod.*type|category|type|line/i.test(h)
+    );
+    if (productLineColIndex !== -1) assigned.add(productLineColIndex);
 
-    // 4. Detect Start of Count / System Qty
-    startCountColIndex = rawHeaders.findIndex(h => /start.*count|system.*qty|qty.*on.*hand|beginning|start/i.test(h));
+    // 5. Detect Start of Count / On Hand / System Qty
+    startCountColIndex = rawHeaders.findIndex((h, idx) => 
+        !assigned.has(idx) && /on\s*hand|on-hand|qty.*on.*hand|start.*count|system.*qty|beginning|start/i.test(h)
+    );
+    if (startCountColIndex !== -1) assigned.add(startCountColIndex);
 
-    // 5. Detect Physical Count
-    countColIndex = rawHeaders.findIndex(h => /^count$|physical count|counted/i.test(h));
+    // 6. Detect Physical Count
+    countColIndex = rawHeaders.findIndex((h, idx) => 
+        !assigned.has(idx) && /^count$|physical count|counted/i.test(h)
+    );
+    if (countColIndex !== -1) assigned.add(countColIndex);
 
-    // 6. Track all assigned metadata indexes
-    const assignedIndexes = new Set([
-        entityColIndex, 
-        warehouseIdColIndex, 
-        warehouseNameColIndex, 
-        warehouseColIndex, 
-        productLineColIndex, 
-        startCountColIndex, 
-        countColIndex
-    ].filter(idx => idx !== -1));
-
-    // 7. Find Item Name / Description (Prioritize exact "Name" or "Description" over SKU/ID codes)
+    // 7. Detect Item Name / Description from remaining unassigned columns
     itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-        !assignedIndexes.has(idx) && /^name$\vert{}^item\s*name$|^product\s*name$\vert{}^description$/i.test(h.trim())
+        !assigned.has(idx) && /^name$\vert{}^item\s*name$|^product\s*name$\vert{}^description$/i.test(h.trim())
     );
 
     if (itemNameColIndex === -1) {
         itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-            !assignedIndexes.has(idx) && /item.*name|product.*name|item.*desc|product.*desc|description|desc|name/i.test(h.trim())
+            !assigned.has(idx) && /item.*name|product.*name|item.*desc|product.*desc|description|desc|name/i.test(h.trim())
         );
     }
 
     if (itemNameColIndex === -1) {
         itemNameColIndex = rawHeaders.findIndex((h, idx) => 
-            !assignedIndexes.has(idx) && /item|sku|part/i.test(h.trim())
+            !assigned.has(idx) && /item|sku|part/i.test(h.trim())
         );
     }
 
     if (itemNameColIndex === -1) {
-        itemNameColIndex = rawHeaders.findIndex((_, idx) => !assignedIndexes.has(idx));
+        itemNameColIndex = rawHeaders.findIndex((_, idx) => !assigned.has(idx));
     }
 }
 
 function saveData() {
-    localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
-    localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
-    localStorage.setItem("entity_workflows", JSON.stringify(entityWorkflowMap));
-
     if (isGlobalSync && db) {
         db.ref('inventory_data').set({
             headers: rawHeaders,
             items: inventoryData,
             workflows: entityWorkflowMap
-        }).catch((error) => {
-            console.error("Firebase save error:", error);
-            alert("Firebase Warning: Could not save to cloud database (" + error.message + ").");
         });
+    } else {
+        localStorage.setItem("inventory_data", JSON.stringify(inventoryData));
+        localStorage.setItem("inventory_headers", JSON.stringify(rawHeaders));
+        localStorage.setItem("entity_workflows", JSON.stringify(entityWorkflowMap));
+    }
+}
+
+function updateCount(id, value) {
+    const item = inventoryData.find(i => i.id === id);
+    if (item) {
+        let valStr = value;
+        if (valStr !== "" && valStr !== null && valStr !== undefined) {
+            let num = parseFloat(valStr);
+            if (!isNaN(num) && num < 0) {
+                valStr = "0";
+            }
+        }
+        item.row[countColIndex] = valStr;
+        saveData();
+        applyFilters();
+    }
+}
+
+function adjustCount(id, delta) {
+    const item = inventoryData.find(i => i.id === id);
+    if (item) {
+        let current = parseInt(item.row[countColIndex], 10);
+        if (isNaN(current) || current < 0) current = 0;
+        item.row[countColIndex] = Math.max(0, current + delta).toString();
+        saveData();
+        applyFilters();
     }
 }
 
 function exportToCSV() {
-    if (inventoryData.length === 0) return;
-    let csvContent = "data:text/csv;charset=utf-8,";
+    if (!inventoryData || inventoryData.length === 0) return;
+
     const formatRow = (arr) => arr.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
 
-    csvContent += formatRow(rawHeaders) + "\r\n";
-    inventoryData.forEach(item => { csvContent += formatRow(item.row) + "\r\n"; });
+    let rows = [];
+    rows.push(formatRow(rawHeaders));
+    inventoryData.forEach(item => {
+        rows.push(formatRow(item.row));
+    });
+
+    const csvContent = rows.join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `inventory_export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 function executeClearData() {
-    localStorage.removeItem("inventory_data");
-    localStorage.removeItem("inventory_headers");
-    localStorage.removeItem("entity_workflows");
-
+    if (isGlobalSync && db) {
+        db.ref('inventory_data').remove();
+    } else {
+        localStorage.clear();
+    }
     inventoryData = [];
     rawHeaders = [];
     entityWorkflowMap = {};
     activeUnlockedEntity = "";
     isApprovalMode = false;
-
-    const entitySelect = document.getElementById('entityFilter');
-    if (entitySelect) entitySelect.value = "";
-
     document.getElementById('filterCard').style.display = 'none';
     document.getElementById('entityPromptBanner').style.display = 'none';
     document.getElementById('dataCard').style.display = 'none';
-
-    if (isGlobalSync && db) {
-        db.ref('inventory_data').remove()
-            .then(() => {
-                alert("Inventory database cleared successfully across all devices.");
-            })
-            .catch((error) => {
-                console.error("Firebase clear error:", error);
-                alert("Database Error: " + error.message);
-            });
-    } else {
-        alert("Local inventory database cleared successfully.");
-    }
+    alert("Inventory database cleared successfully.");
 }
