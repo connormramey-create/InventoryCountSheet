@@ -1,4 +1,6 @@
-# Simple workflow for deploying static content to GitHub Pages
+# Deploys the static site to GitHub Pages.
+# The Firebase web config is injected from repository secrets at build time
+# (Settings > Secrets and variables > Actions), so it never lives in the repo.
 name: Deploy static content to Pages
 
 on:
@@ -22,7 +24,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
   deploy:
     environment:
       name: github-pages
@@ -31,13 +32,59 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Generate Firebase config from secrets
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const env = process.env;
+          const config = {
+            apiKey: env.FIREBASE_API_KEY,
+            authDomain: env.FIREBASE_AUTH_DOMAIN,
+            databaseURL: env.FIREBASE_DATABASE_URL,
+            projectId: env.FIREBASE_PROJECT_ID,
+            storageBucket: env.FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID,
+            appId: env.FIREBASE_APP_ID,
+            measurementId: env.FIREBASE_MEASUREMENT_ID,
+          };
+          // Fail the deploy rather than silently shipping a Local-Storage-only app.
+          const required = ['apiKey', 'databaseURL', 'projectId', 'appId'];
+          const missing = required.filter(k => !config[k] || !config[k].trim());
+          if (missing.length) {
+            console.error('::error::Missing Firebase secrets for: ' + missing.join(', ') +
+              '. Add them under Settings > Secrets and variables > Actions.');
+            process.exit(1);
+          }
+          for (const k of Object.keys(config)) {
+            if (!config[k]) delete config[k]; else config[k] = config[k].trim();
+          }
+          fs.writeFileSync('js/firebase-config.js',
+            '// Generated at deploy time from GitHub Secrets. Do not edit.\n' +
+            'window.FIREBASE_CONFIG = ' + JSON.stringify(config, null, 2) + ';\n');
+          console.log('Wrote js/firebase-config.js with keys: ' + Object.keys(config).join(', '));
+          EOF
+
+      - name: Cache-bust script and style URLs with the commit SHA
+        run: sed -i "s/?v=[0-9A-Za-z]*\"/?v=${GITHUB_SHA::7}\"/g" index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
           path: '.'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
