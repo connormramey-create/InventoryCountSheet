@@ -1,0 +1,3 @@
+# Generated at deploy time from GitHub Secrets - never commit
+js/firebase-config.js
+.DS_Store
