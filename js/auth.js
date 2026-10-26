@@ -1,3 +1,9 @@
+function getManagerPassword(entityName) {
+    const cleanName = (entityName || "").trim().toLowerCase();
+    const foundKey = Object.keys(MANAGER_PASSWORDS).find(k => k.trim().toLowerCase() === cleanName);
+    return foundKey ? MANAGER_PASSWORDS[foundKey] : null;
+}
+
 function getEntityPassword(entityName) {
     if (!entityName) return ENTITY_PASSWORDS["default"] || "1234";
     const cleanName = entityName.trim();
