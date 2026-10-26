@@ -34,7 +34,7 @@ function promptProtectedAction(actionType, entityName = "") {
         desc.textContent = `Enter access password for entity list: ${entityName}.`;
     } else if (actionType === 'approve_entity') {
         title.textContent = "Manager Approval Authentication";
-        desc.textContent = "Enter Manager Password to access Approval Mode & Start of Count values.";
+        desc.textContent = `Enter the ${activeUnlockedEntity} Manager Password to access Approval Mode & Start of Count values.`;
     } else if (actionType === 'export_all') {
         title.textContent = "Full Export Authentication";
         desc.textContent = "Enter Master Admin Password to export every entity, including On Hand values.";
@@ -97,7 +97,8 @@ function submitModalPassword() {
             alert("Incorrect Entity Password.");
         }
     } else if (currentAction === 'approve_entity') {
-        if (inputPass === ADMIN_PASSWORD) {
+        const managerPass = getManagerPassword(activeUnlockedEntity);
+        if ((managerPass && inputPass === managerPass) || inputPass === ADMIN_PASSWORD) {
             isApprovalMode = true;
             closeModal(false);
             applyFilters();
