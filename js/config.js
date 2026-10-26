@@ -28,6 +28,25 @@ const ENTITY_PASSWORDS = {
     "Highest Quality": "HQL"
 };
 
+const MANAGER_PASSWORDS = {
+    "Native Grasses": "NG-MGR",
+    "Brookside": "BRK-MGR",
+    "Meehans": "MEE-MGR",
+    "LawnRX": "LRX-MGR",
+    "Gro-Masters": "GRO-MGR",
+    "Seacoast Turf": "TURF-MGR",
+    "Grasshopper Lawns": "GHP-MGR",
+    "Green Image": "GRI-MGR",
+    "Fairway": "FWY-MGR",
+    "Seacoast Tree": "TREE-MGR",
+    "Delaware Valley Turf": "DVT-MGR",
+    "Custom": "CLC-MGR",
+    "Green Machine": "GRM-MGR",
+    "Total Lawn Care": "TLC-MGR",
+    "Concord Custom Lawn Care": "CRD-MGR",
+    "Highest Quality": "HQL-MGR"
+};
+
 // Global State Variables
 let db = null;
 let isGlobalSync = false;
